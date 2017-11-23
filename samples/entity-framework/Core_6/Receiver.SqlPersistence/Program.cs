@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
-using NHibernate.Cfg;
-using NHibernate.Dialect;
 using NServiceBus;
-using NServiceBus.Persistence;
+using NServiceBus.Persistence.Sql;
 using NServiceBus.Transport.SQLServer;
 
 class Program
@@ -17,8 +15,6 @@ class Program
         {
             receiverDataContext.Database.Initialize(true);
         }
-
-
 
         var endpointConfiguration = new EndpointConfiguration("Samples.EntityFrameworkUnitOfWork.Receiver");
         endpointConfiguration.EnableInstallers();
@@ -36,30 +32,25 @@ class Program
         transport.UseSchemaForQueue("error", "dbo");
         transport.UseSchemaForQueue("audit", "dbo");
 
-        var persistence = endpointConfiguration.UsePersistence<NHibernatePersistence>();
-        var hibernateConfig = new Configuration();
-        hibernateConfig.DataBaseIntegration(x =>
-        {
-            x.ConnectionString = connection;
-            x.Dialect<MsSql2012Dialect>();
-        });
+        var persistence = endpointConfiguration.UsePersistence<SqlPersistence>();
+        persistence.ConnectionBuilder(() => new SqlConnection(connection));
+        persistence.SubscriptionSettings().DisableCache();
+        var dialect = persistence.SqlDialect<SqlDialect.MsSqlServer>();
+        dialect.Schema("receiver");
 
-        hibernateConfig.SetProperty("default_schema", "receiver");
-        persistence.UseConfiguration(hibernateConfig);
-
-        #region UnitOfWork_NHibernate
+        #region UnitOfWork_SQL
 
         var pipeline = endpointConfiguration.Pipeline;
         pipeline.Register(new UnitOfWorkSetupBehaviorBehavior(storageSession =>
         {
-            var dbConnection = storageSession.Session().Connection;
+            var dbConnection = storageSession.SqlPersistenceSession().Connection;
             var context = new ReceiverDataContext(dbConnection);
 
-            //Don't use transaction because connection is enlisted in the TransactionScope
-            context.Database.UseTransaction(null);
+            //Use the same underlying ADO.NET transaction
+            context.Database.UseTransaction(storageSession.SqlPersistenceSession().Transaction);
 
             //Call SaveChanges before completing storage session
-            storageSession.OnSaveChanges(x => context.SaveChangesAsync());
+            storageSession.SqlPersistenceSession().OnSaveChanges(x => context.SaveChangesAsync());
 
             return context;
         }), "Sets up unit of work for the message");
