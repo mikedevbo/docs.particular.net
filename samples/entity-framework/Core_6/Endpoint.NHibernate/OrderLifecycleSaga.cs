@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Threading.Tasks;
 using NServiceBus;
+using NServiceBus.Logging;
 
 public class OrderLifecycleSaga :
     Saga<OrderLifecycleSagaData>,
     IAmStartedByMessages<OrderSubmitted>,
     IHandleTimeouts<OrderTimeout>
 {
+    static ILog log = LogManager.GetLogger<OrderLifecycleSaga>();
+
     protected override void ConfigureHowToFindSaga(SagaPropertyMapper<OrderLifecycleSagaData> mapper)
     {
         mapper.ConfigureMapping<OrderSubmitted>(m => m.OrderId)
@@ -23,6 +26,9 @@ public class OrderLifecycleSaga :
         {
             OrderId = message.OrderId,
         };
+
+        log.Info($"Order process {message.OrderId} started.");
+
         await context.Reply(orderAccepted)
             .ConfigureAwait(false);
     }

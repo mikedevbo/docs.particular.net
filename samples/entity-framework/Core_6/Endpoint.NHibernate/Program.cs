@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Data.Entity;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
 using NHibernate.Cfg;
@@ -11,30 +12,23 @@ class Program
 {
     static async Task Main()
     {
-        var connection = @"Data Source=.\SqlExpress;Database=NsbSamplesEfUow;Integrated Security=True";
-        Console.Title = "Samples.EntityFrameworkUnitOfWork.Receiver";
+        var connection = @"Data Source=.\SqlExpress;Database=NsbSamplesEfUowNh;Integrated Security=True;Max Pool Size=100";
+        Console.Title = "Samples.EntityFrameworkUnitOfWork.NHibernate";
         using (var receiverDataContext = new ReceiverDataContext(new SqlConnection(connection)))
         {
+            Database.SetInitializer(new CreateDatabaseIfNotExists<ReceiverDataContext>());
             receiverDataContext.Database.Initialize(true);
         }
 
-
-
-        var endpointConfiguration = new EndpointConfiguration("Samples.EntityFrameworkUnitOfWork.Receiver");
+        var endpointConfiguration = new EndpointConfiguration("Samples.EntityFrameworkUnitOfWork.NHibernate");
         endpointConfiguration.EnableInstallers();
         endpointConfiguration.SendFailedMessagesTo("error");
+        endpointConfiguration.Recoverability().DisableLegacyRetriesSatellite();
+        endpointConfiguration.ExecuteTheseHandlersFirst(typeof(CreateOrderHandler), typeof(OrderLifecycleSaga), typeof(CreateShipmentHandler));
 
         var transport = endpointConfiguration.UseTransport<SqlServerTransport>();
         transport.ConnectionString(connection);
-        var routing = transport.Routing();
-        routing.RouteToEndpoint(typeof(OrderAccepted).Assembly, "Samples.EntityFrameworkUnitOfWork.Sender");
-        routing.RegisterPublisher(typeof(OrderAccepted).Assembly, "Samples.EntityFrameworkUnitOfWork.Sender");
-
-        transport.DefaultSchema("receiver");
-
-        transport.UseSchemaForEndpoint("Samples.EntityFrameworkUnitOfWork.Sender", "sender");
-        transport.UseSchemaForQueue("error", "dbo");
-        transport.UseSchemaForQueue("audit", "dbo");
+        transport.UseNativeDelayedDelivery().DisableTimeoutManagerCompatibility();
 
         var persistence = endpointConfiguration.UsePersistence<NHibernatePersistence>();
         var hibernateConfig = new Configuration();
@@ -44,7 +38,6 @@ class Program
             x.Dialect<MsSql2012Dialect>();
         });
 
-        hibernateConfig.SetProperty("default_schema", "receiver");
         persistence.UseConfiguration(hibernateConfig);
 
         #region UnitOfWork_NHibernate
@@ -66,19 +59,9 @@ class Program
 
         #endregion
 
-        SqlHelper.CreateSchema(connection, "receiver");
         var endpointInstance = await Endpoint.Start(endpointConfiguration)
             .ConfigureAwait(false);
 
-        try
-        {
-            Console.WriteLine("Press any key to exit");
-            Console.ReadKey();
-        }
-        finally
-        {
-            await endpointInstance.Stop()
-                .ConfigureAwait(false);
-        }
+        await Sender.Start(endpointInstance);
     }
 }

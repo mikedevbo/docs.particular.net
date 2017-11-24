@@ -5,12 +5,10 @@ using System.Data.Common;
 public class ReceiverDataContext :
     DbContext
 {
-    #region EntityFramework
     public ReceiverDataContext(IDbConnection connection)
         : base((DbConnection) connection, false)
     {
     }
-    #endregion
 
     public DbSet<Order> Orders { get; set; }
     public DbSet<Shipment> Shipments { get; set; }
@@ -26,6 +24,8 @@ public class ReceiverDataContext :
 
         var shipments = modelBuilder.Entity<Shipment>();
         shipments.ToTable("Shipments");
-        shipments.HasKey(x => x.OrderId);
+        shipments.HasKey(x => x.Id);
+        //shipments.HasKey(x => x.OrderId);
+        shipments.HasRequired(x => x.Order);
     }
 }
