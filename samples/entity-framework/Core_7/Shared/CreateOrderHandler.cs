@@ -2,23 +2,25 @@ using NServiceBus;
 using System.Threading.Tasks;
 using NServiceBus.Logging;
 
-public class CreateShipmentHandler :
+public class CreateOrderHandler :
     IHandleMessages<OrderSubmitted>
 {
-    static ILog log = LogManager.GetLogger<CreateShipmentHandler>();
+    static ILog log = LogManager.GetLogger<CreateOrderHandler>();
 
     public Task Handle(OrderSubmitted message, IMessageHandlerContext context)
     {
-        #region StoreShipment
+        #region StoreOrder
 
-        var shipment = new Shipment
+        var order = new Order
         {
             OrderId = message.OrderId,
-            Location = message.ShipTo
+            Value = message.Value
         };
-        context.DataContext().Shipments.Add(shipment);
+        context.DataContext().Orders.Add(order);
 
         #endregion
+
+        log.Info($"Order {message.OrderId} worth {message.Value} created.");
 
         return Task.CompletedTask;
     }

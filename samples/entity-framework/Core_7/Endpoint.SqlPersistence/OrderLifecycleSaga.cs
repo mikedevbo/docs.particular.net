@@ -1,17 +1,22 @@
 ﻿using System;
 using System.Threading.Tasks;
 using NServiceBus;
+using NServiceBus.Logging;
+using NServiceBus.Persistence.Sql;
 
 public class OrderLifecycleSaga :
-    Saga<OrderLifecycleSagaData>,
+    SqlSaga<OrderLifecycleSagaData>,
     IAmStartedByMessages<OrderSubmitted>,
     IHandleTimeouts<OrderTimeout>
 {
-    protected override void ConfigureHowToFindSaga(SagaPropertyMapper<OrderLifecycleSagaData> mapper)
+    static ILog log = LogManager.GetLogger<OrderLifecycleSaga>();
+
+    protected override void ConfigureMapping(IMessagePropertyMapper mapper)
     {
-        mapper.ConfigureMapping<OrderSubmitted>(m => m.OrderId)
-            .ToSaga(s => s.OrderId);
+        mapper.ConfigureMapping<OrderSubmitted>(m => m.OrderId);
     }
+
+    protected override string CorrelationPropertyName => nameof(OrderLifecycleSagaData.OrderId);
 
     public async Task Handle(OrderSubmitted message, IMessageHandlerContext context)
     {
@@ -23,6 +28,9 @@ public class OrderLifecycleSaga :
         {
             OrderId = message.OrderId,
         };
+
+        log.Info($"Order process {message.OrderId} started.");
+
         await context.Reply(orderAccepted)
             .ConfigureAwait(false);
     }
