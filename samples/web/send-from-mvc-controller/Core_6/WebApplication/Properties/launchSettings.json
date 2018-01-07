@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "WebApplication": {
+      "commandName": "Executable",
+      "executablePath": "c:\\Program Files\\IIS Express\\iisexpress.exe",
+      "commandLineArgs": "/path:$(SolutionDir)$(ProjectName) /port:5555"
+    }
+  }
+}
